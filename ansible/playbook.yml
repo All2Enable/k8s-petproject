@@ -1,0 +1,40 @@
+---
+- name: Prepare Kubernetes Nodes
+  hosts: all
+  become: true
+  tasks:
+    - name: Ping check
+      ping:
+
+- name: Install Docker & Containerd
+  hosts: all
+  become: true
+  roles:
+    - docker
+
+- name: Prepare Kubernetes Nodes
+  hosts: all
+  become: true
+  roles:
+    - docker
+    - k8s-install
+
+- name: Initialize Kubernetes Master
+  hosts: k8s-master
+  become: true
+  roles:
+    - k8s-master
+
+- name: Join Worker Nodes
+  hosts: k8s-worker-1, k8s-worker-2
+  become: true
+  roles:
+    - k8s-worker
+
+- name: Setup Tools & CI/CD
+  hosts: k8s-master
+  become: true
+  roles:
+    - helm
+    - gitlab-runner
+    - monitoring

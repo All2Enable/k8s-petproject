@@ -1,0 +1,13 @@
+---
+- name: Check if node is already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Join the cluster
+  command: sh /vagrant/join_command.sh
+  when: not kubelet_conf.stat.exists
+  register: join_cluster
+  failed_when: 
+    - join_cluster.rc != 0
+    - "'already exists' not in join_cluster.stderr" 

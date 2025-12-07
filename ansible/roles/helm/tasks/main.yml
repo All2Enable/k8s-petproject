@@ -1,0 +1,47 @@
+---
+- name: Install unarchive dependencies
+  apt:
+    name:
+      - tar
+      - curl
+    state: present
+
+- name: Create temporary directory for Helm
+  file:
+    path: /tmp/helm_install
+    state: directory
+    mode: '0755'
+
+- name: Download Helm archive
+  get_url:
+    url: https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz
+    dest: /tmp/helm_install/helm.tar.gz
+
+- name: Unarchive Helm
+  unarchive:
+    src: /tmp/helm_install/helm.tar.gz
+    dest: /tmp/helm_install
+    remote_src: yes
+
+- name: Move Helm binary to path
+  copy:
+    src: /tmp/helm_install/linux-amd64/helm
+    dest: /usr/local/bin/helm
+    mode: '0755'
+    remote_src: yes
+    owner: root
+    group: root
+
+- name: Verify Helm installation
+  command: helm version
+  register: helm_version_check
+  changed_when: false
+
+- name: Print Helm version
+  debug:
+    msg: "Helm installed: {{ helm_version_check.stdout }}"
+
+- name: Clean up temporary files
+  file:
+    path: /tmp/helm_install
+    state: absent

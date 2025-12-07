@@ -1,0 +1,44 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+build-job:
+  stage: build
+  tags:
+    - local-k8s
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/app"
+      --dockerfile "${CI_PROJECT_DIR}/app/Dockerfile"
+      --destination "${IMAGE_TAG}"
+
+deploy-job:
+  stage: deploy
+  tags:
+    - local-k8s
+  image: bitnami/kubectl:latest
+  script:
+    - |
+      kubectl create secret docker-registry gitlab-registry-auth \
+        --namespace default \
+        --docker-server=$CI_REGISTRY \
+        --docker-username=$CI_DEPLOY_USER \
+        --docker-password=$CI_DEPLOY_PASSWORD \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+      kubectl apply -f app/k8s/redis.yaml --namespace default
+
+      sed -i "s|image: .*|image: ${IMAGE_TAG}|g" app/k8s/app.yaml
+
+      kubectl apply -f app/k8s/app.yaml --namespace default
+
+      kubectl rollout restart deployment/flask-app --namespace default

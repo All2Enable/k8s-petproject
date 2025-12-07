@@ -1,0 +1,52 @@
+---
+- name: Add GitLab Helm Repo
+  command: helm repo add gitlab https://charts.gitlab.io
+  register: helm_repo_result
+  changed_when: "'has been added' in helm_repo_result.stdout"
+  failed_when: 
+    - helm_repo_result.rc != 0
+    - "'already exists' not in helm_repo_result.stderr"
+
+- name: Update Helm repositories
+  command: helm repo update
+
+- name: Uninstall existing GitLab Runner
+  command: helm uninstall gitlab-runner --namespace gitlab-runner
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  ignore_errors: yes 
+
+- name: Create values.yaml for GitLab Runner
+  copy:
+    dest: /tmp/gitlab-runner-values.yaml
+    content: |
+      gitlabUrl: https://gitlab.com/
+      runnerToken: "INSERT CODE HERE"  #
+      
+      rbac:
+        create: true
+      
+      runners:
+        runUntagged: false
+        tags: "local-k8s"
+        privileged: true
+
+- name: Install GitLab Runner
+  command: >
+    helm install gitlab-runner gitlab/gitlab-runner
+    --namespace gitlab-runner
+    --create-namespace
+    -f /tmp/gitlab-runner-values.yaml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Create ClusterRoleBinding for GitLab Runner
+  shell: >
+    kubectl create clusterrolebinding gitlab-runner-admin
+    --clusterrole=cluster-admin
+    --serviceaccount=gitlab-runner:default
+    --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+

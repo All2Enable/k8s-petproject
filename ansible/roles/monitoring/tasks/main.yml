@@ -1,0 +1,23 @@
+---
+- name: Add Prometheus Community Repo
+  command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  register: helm_repo_result
+  changed_when: "'has been added' in helm_repo_result.stdout"
+  failed_when: 
+    - helm_repo_result.rc != 0
+    - "'already exists' not in helm_repo_result.stderr"
+
+- name: Update Helm repositories
+  command: helm repo update
+
+- name: Install kube-prometheus-stack
+  command: >
+    helm upgrade --install monitoring prometheus-community/kube-prometheus-stack
+    --namespace monitoring
+    --create-namespace
+    --set grafana.service.type=NodePort
+    --set grafana.service.nodePort=30002
+    --set prometheus.service.type=NodePort
+    --set prometheus.service.nodePort=30003
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

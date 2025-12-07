@@ -1,0 +1,52 @@
+---
+- name: Initialize Kubernetes Cluster
+  command: >
+    kubeadm init
+    --apiserver-advertise-address=192.168.56.10
+    --pod-network-cidr=10.244.0.0/16
+    --node-name k8s-master
+  args:
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init
+
+- name: Create .kube directory for vagrant user
+  file:
+    path: /home/vagrant/.kube
+    state: directory
+    owner: vagrant
+    group: vagrant
+    mode: 0755
+
+- name: Copy kube config to vagrant user
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/vagrant/.kube/config
+    remote_src: yes
+    owner: vagrant
+    group: vagrant
+    mode: 0600
+
+- name: Download Flannel Manifest
+  get_url:
+    url: https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+    dest: /tmp/kube-flannel.yml
+
+- name: Patch Flannel Manifest (Force Interface enp0s8)
+  replace:
+    path: /tmp/kube-flannel.yml
+    regexp: '(\s+)- --kube-subnet-mgr'
+    replace: '\1- --kube-subnet-mgr\n\1- --iface=enp0s8'
+
+- name: Apply Flannel Manifest
+  become: false
+  command: kubectl apply -f /tmp/kube-flannel.yml
+
+- name: Generate join command
+  command: kubeadm token create --print-join-command
+  register: join_command
+
+- name: Save join command to shared folder
+  copy:
+    content: "{{ join_command.stdout }}"
+    dest: /vagrant/join_command.sh
+    mode: 0777
